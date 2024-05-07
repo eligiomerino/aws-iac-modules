@@ -1,4 +1,4 @@
-# Terraform modules to be used as IaC layers
+# Terraform Modules For IaC Layers
 By [@EligioMerino](https://github.com/eligiomerino), 2024.
 
 This is a Terraform Modules project that can be used to build high-availability AWS infrastructure per service layer, such as:
