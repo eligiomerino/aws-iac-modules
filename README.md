@@ -17,40 +17,8 @@ For example, this code configures and builds a HA VPC in a region withing 2 AZs 
 /* By Eligio Merino, 2024
    https://github.com/eligiomerino
 */
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.48"
-    }
-  }
-  required_version = "~> 1.5"
-}
-
-locals {
-  environment = "development"
-  vpc_cidr = "10.0.0.0/16"
-}
-
-# Configure the AWS Provider
-# Change the profile name to the one you already configured uwing the AWS CLI
-# For instance:
-#   aws configure --profile development
-provider "aws" {
-  region = "us-east-2"
-  profile= local.environment
-
-  default_tags {
-    tags = {
-      terraform   = "true"
-      environment = local.environment
-      project     = "aws-vpc-iac"
-    }
-  }
-}
-
 module "network" {
-  source = "../../../aws/modules/network/vpc"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/main"
   cidr = local.vpc_cidr
 
   tags = {
@@ -59,7 +27,7 @@ module "network" {
 }
 
 module "default_security_group" {
-  source = "../../../aws/modules/network/default-security-group"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/default-security-group"
   vpc_id = module.network.vpc_id
   
   port = 80
@@ -70,7 +38,7 @@ module "default_security_group" {
 }
 
 module "internet_gateway" {
-  source = "../../../aws/modules/network/internet-gateway"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/internet-gateway"
 
   vpc_id = module.network.vpc_id
 }
@@ -80,29 +48,39 @@ data "aws_availability_zones" "azs" {}
 
 # Creates public and private subnets on the first AZ
 module "public_subnets" {
-  source = "../../../aws/modules/network/subnet"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/subnet"
   vpc_id = module.network.vpc_id
 
   count = "${length(var.public_cidrs)}"
   cidr = "${var.public_cidrs[count.index]}"
   az = data.aws_availability_zones.azs.names[count.index]
-  name = format("%s-%s","public-subnet", "${element(split("-", data.aws_availability_zones.azs.names[count.index]), 2)}") 
   map_public_ip = true
+
+  tags = {
+    "Name" = format("%s-%s","public-subnet", "${element(split("-", data.aws_availability_zones.azs.names[count.index]), 2)}")
+    "kubernetes.io/role/elb" = "1"
+    "kubernetes.io/cluster/eksdemo" = "owned"
+  }
 }
 
 module "private_subnets" {
-  source = "../../../aws/modules/network/subnet"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/subnet"
   vpc_id = module.network.vpc_id
 
   count = "${length(var.private_cidrs)}"
   cidr = "${var.private_cidrs[count.index]}"
   az = data.aws_availability_zones.azs.names[count.index]
-  name = format("%s-%s","private-subnet", "${element(split("-", data.aws_availability_zones.azs.names[count.index]), 2)}")
+
+  tags = {
+    "Name" = format("%s-%s","private-subnet", "${element(split("-", data.aws_availability_zones.azs.names[count.index]), 2)}")
+    "kubernetes.io/role/internal-elb" = "1"
+    "kubernetes.io/cluster/eksdemo" = "owned"
+  }
 }
 
 module "nat_gateway" {
   depends_on = [module.internet_gateway, module.public_subnets]
-  source = "../../../aws/modules/network/nat-gateway"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/nat-gateway"
 
   subnet_id = module.public_subnets[0].subnet_id
   name = "ngw"
@@ -112,7 +90,7 @@ module "nat_gateway" {
 # to allow Internet traffic and subscribes the public subnets
 module "default_rt" {
   depends_on = [module.internet_gateway, module.public_subnets]
-  source = "../../../aws/modules/network/default-route-table"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/default-route-table"
 
   vpc_cidr = local.vpc_cidr
   default_rt_id = module.network.default_route_table_id
@@ -121,7 +99,7 @@ module "default_rt" {
 }
 module "default_rt_association" {
   depends_on = [module.default_rt]
-  source = "../../../aws/modules/network/route-table-association"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main/vpc/route-table-association"
 
   count = "${length(module.public_subnets)}"
 
@@ -133,7 +111,7 @@ module "default_rt_association" {
 # and subscribes the private subnets
 module "private_rt" {
   depends_on = [module.internet_gateway, module.nat_gateway, module.private_subnets]
-  source = "../../../aws/modules/network/private-route-table"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/private-route-table"
 
   vpc_id = module.network.vpc_id
   vpc_cidr = local.vpc_cidr
@@ -142,7 +120,7 @@ module "private_rt" {
 }
 module "private_rt_association" {
   depends_on = [module.private_rt]
-  source = "../../../aws/modules/network/route-table-association"
+  source = "github.com/eligiomerino/aws-iac-modules?ref=main//vpc/route-table-association"
 
   count = "${length(module.private_subnets)}"
 
