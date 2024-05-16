@@ -14,11 +14,6 @@ variable "cidr" {
   type        = string
 }
 
-variable "name" {
-  description = "Subnet name"
-  type        = string 
-}
-
 variable "az" { 
   description = "AZ name"
   type        = string 
@@ -28,4 +23,9 @@ variable "map_public_ip" {
   description = "Maps at launch public IP for public subnets"
   type        = bool
   default     = false
+}
+
+variable "tags" {
+  description = "Tags to be added to the subnet"
+  type = map
 }
